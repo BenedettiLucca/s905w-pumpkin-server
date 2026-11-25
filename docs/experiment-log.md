@@ -4,6 +4,24 @@
 
 Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros detalhes pessoais devem ser sanitizados antes do commit.
 
+## Registro 011 — 2026-11-25 12:18 -03 — Nova tentativa em 16 GB: aborto silencioso por bug no script
+
+- **Fase:** F1 — em andamento (microSD de 16 GB).
+- **Objetivo / hipótese:** após a troca do leitor USB, repetir a gravação verificada no cartão de 16 GB. Hipótese inicial: as desconexões do leitor antigo teriam impedido a execução.
+- **Equipamento / sistema onde o comando rodou:** host CachyOS x86-64; novo leitor NORELSYS `2537:1081` (`1081CS0` / `1081CS1`) em `usb 1-3.2.4`, atrás de hub GenesysLogic; cartão de 16 GB em `/dev/sde` (16.358.834.176 bytes, `removable=1`); comando executado pelo operador com `sudo`. Nenhum comando executado na TX9.
+- **Versões / hashes:** mesma imagem `Armbian_26.11.0_amlogic_s905w_noble_6.12.117_server_2026.11.14.img.gz`, SHA-256 `de7440731c…d77fd7f`, 3.686.793.216 bytes descomprimidos. `by-id`: `/dev/disk/by-id/usb-NORELSYS_1081CS0_0123456789ABCDE-0:0 -> ../../sde`.
+- **Comandos executados (sem segredos):** `sudo bash /tmp/opencode/armbian/write-sd-16g-sde.sh`; leitura de `journalctl -k`, `lsblk`, `stat`, `readlink -f`, `blockdev` e `findmnt` somente-leitura.
+- **Resultado observado / evidência:**
+  - O novo leitor é estável após a reenumeração inicial: uma desconexão em 12:15:54, reenumeração em 12:15:55 e nenhum evento de `1-3.2.4` de 12:16 em diante.
+  - O operador recebeu apenas `Falha (codigo 1). Log do kernel salvo em ...`. **Nenhuma linha `ABORTADO:`** e nenhum `dd-write-16g-sde.log`: o script parou antes do `dd`, sem tocar no cartão.
+  - Causa raiz encontrada por reprodução local: `precheck()` terminava com `findmnt … && fail "alvo montado"`. Quando `findmnt` retorna 1 (nenhuma montagem), o **último comando da função** falha; com `set -e`, a chamada `precheck` é tratada como comando falho e o script sai com código 1 **sem imprimir `ABORTADO:`**. Teste mínimo: `bash -c 'set -e; f(){ false && echo x; }; f; echo SURVIVED'` → código 1, sem `SURVIVED`.
+  - O mesmo padrão já explica a saída silenciosa do Registro 010; não foi o leitor nem o cartão. A verificação somente-leitura repetida passa em todos os guards.
+  - Correção aplicada: `return 0` ao final de `precheck()` em `/tmp/opencode/armbian/write-sd-16g.sh` e `/tmp/opencode/armbian/write-sd-16g-sde.sh`; `bash -n` OK nos dois.
+- **Falhas / limitações:** a correção ainda não foi executada com `sudo`; a próxima execução dirá se algum guard real dispara. O leitor novo está atrás de hub USB — se houver desconexão sob carga, mover para porta direta.
+- **Rollback e estado final:** cartão de 16 GB intacto, TX9 intacta, imagem íntegra. Nenhum dado perdido.
+- **Gate aprovado?** NÃO (F1 com o cartão de 16 GB).
+- **Próximo experimento:** operador executa `sudo bash /tmp/opencode/armbian/write-sd-16g-sde.sh` novamente e cola a saída completa, inclusive eventual `ABORTADO:`. Esperado: `3686793216 bytes` copiados, `FDT=/dtb/amlogic/meson-gxl-s905w-tx3-mini.dtb`, sem `u-boot.ext`.
+
 ## Registro 001 — 2026-11-24 — Preparação do repositório
 
 - **Fase:** F0 — planejada.
