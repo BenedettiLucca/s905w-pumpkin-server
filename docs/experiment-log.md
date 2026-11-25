@@ -1,6 +1,6 @@
 # Experiment log — S905W Pumpkin Server
 
-**Última situação comprovada:** F0 e F1 concluídas; F2 em andamento. O cartão foi gravado e verificado com sucesso, mas o HDMI da TX9 não funciona e o proprietário não consegue confirmar visualmente o boot. Varredura somente-leitura da rede local não encontrou host Armbian novo, e o reset não mudou o resultado (Registros 007–008). Hipótese atual: o U-Boot da placa pode exigir `u-boot.ext` (o FAQ oficial cita TX3 Mini/S905W);preparação do arquivo e próximo teste no Registro 008. Nenhuma alteração na eMMC/bootloader da TX9.
+**Última situação comprovada:** F0 e F1 concluídas; F2 em andamento. O cartão de 64 GB foi gravado e verificado com sucesso, mas o HDMI da TX9 não funciona e o proprietário não consegue confirmar visualmente o boot. Varredura somente-leitura da rede local não encontrou host Armbian novo, e o reset não mudou o resultado (Registros 007–008). Por decisão do proprietário, o cartão de 64 GB foi formatado em exFAT para armazenamento de ROMs (Registro 009) e o próximo teste usará um microSD de 16 GB. Nenhuma alteração na eMMC/bootloader da TX9.
 
 Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros detalhes pessoais devem ser sanitizados antes do commit.
 
@@ -131,6 +131,22 @@ Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros 
 - **Rollback e estado final:** nenhuma alteração no cartão ou na TX9 neste registro. Arquivos preparados no host: `/tmp/opencode/armbian/armbian.img` (cópia descomprimida, 3,5 GB), `/tmp/opencode/armbian/u-boot.ext` e `/tmp/opencode/armbian/add-uboot-ext.sh` (syntax check OK).
 - **Gate aprovado?** NÃO (F2).
 - **Próximo experimento:** operador remove o cartão da TX9, recoloca no leitor USB e executa `sudo bash /tmp/opencode/armbian/add-uboot-ext.sh`; o script grava apenas `u-boot.ext` na partição FAT e confirma o SHA-256. Em seguida, reinserir na TX9, ligar mantendo o reset pressionado por mais tempo e repetir a varredura de rede. Se ainda bootar Android, trocar para microSD de 16/32 GB (risco SDXC documentado) antes de considerar UART.
+
+## Registro 009 — 2026-11-25 11:54 -03 — Reaproveitamento do cartão de 64 GB
+
+- **Fase:** preparação de mídia (fora das fases F0–F7 do servidor).
+- **Objetivo / hipótese:** transformar o microSD de 64 GB que continha a imagem Armbian em armazenamento comum (ROMs de emulação), conforme decisão do proprietário, antes de testar um cartão de 16 GB no boot.
+- **Equipamento / sistema onde o comando rodou:** host CachyOS x86-64; alvo `/dev/sdd` via leitor USB GEMBIRD; comando executado pelo operador com `sudo`. Nenhum comando executado na TX9.
+- **Versões / hashes:** `exfatprogs 1.4.5 (2026-11-18)`. Alvo confirmado pelo script: 63.864.569.856 bytes, `removable=1`, com `sdd1` vfat `BOOT` e `sdd2` ext4 `ROOTFS` — ou seja, o cartão Armbian e não o de 16 GB.
+- **Comandos executados (sem segredos):** `sudo bash /tmp/opencode/armbian/format-roms-sd.sh` (wipe das assinaturas, nova tabela MBR com uma partição tipo 0x7, `mkfs.exfat -n ROMS /dev/sdd1`).
+- **Resultado observado / evidência:**
+  - `mkfs.exfat` concluiu: `Creating exFAT filesystem(/dev/sdd1, cluster size=131072)`, `Filesystem UUID: EFB7-F6C1`, `exFAT format complete!`.
+  - `lsblk -f`: `sdd1` `exfat` versão `1.0`, label `ROMS`, UUID `EFB7-F6C1`; `blkid`: `LABEL="ROMS" UUID="EFB7-F6C1" BLOCK_SIZE="512" TYPE="exfat" PARTUUID="db7c3101-01"`.
+  - Montagem somente-leitura verificada: raiz vazia (apenas `.` e `..`).
+- **Falhas / limitações:** nenhuma. A imagem Armbian deste cartão foi apagada intencionalmente; o cartão não deve mais ser usado para boot até nova gravação.
+- **Rollback e estado final:** cartão pronto para ROMs; TX9 intacta. O próximo boot usará outro cartão.
+- **Gate aprovado?** SIM para o objetivo deste registro (mídia de dados); F2 permanece NÃO.
+- **Próximo experimento:** operador insere o microSD de 16 GB no leitor; agente identifica o dispositivo somente-leitura e o operador executa `sudo bash /tmp/opencode/armbian/write-sd-16g.sh`, que grava a mesma imagem com hashes e verificações rígidas (destino `/dev/sdd`, sem retry automático, `blkid` vfat/ext4 obrigatório).
 
 ## Modelo para novos registros
 
