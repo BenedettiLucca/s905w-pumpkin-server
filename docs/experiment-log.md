@@ -1,6 +1,6 @@
 # Experiment log — S905W Pumpkin Server
 
-**Última situação comprovada:** F0 e F1 concluídas. Duas gravações falharam por desconexão USB do leitor (na segunda, a imagem foi gravada por engano em um arquivo regular dentro de `/dev`); a terceira tentativa, com outro leitor/porta e script sem retry, gravou e verificou a imagem com sucesso. `uEnv.txt` aponta para `meson-gxl-s905w-tx3-mini.dtb`, o DTB existe e `u-boot.ext` está ausente. Próximo: primeiro boot externo e coleta de evidências do F2. Nenhuma alteração na eMMC/bootloader da TX9.
+**Última situação comprovada:** F0 e F1 concluídas; F2 em andamento. O cartão foi gravado e verificado com sucesso, mas o HDMI da TX9 não funciona e o proprietário não consegue confirmar visualmente o boot. Varredura somente-leitura da rede local não encontrou host Armbian novo (ver Registro 007); hipótese atual = Android iniciou ou o Armbian não obteve rede. Próximo: repetir o boot mantendo o botão de reset pressionado. Nenhuma alteração na eMMC/bootloader da TX9.
 
 Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros detalhes pessoais devem ser sanitizados antes do commit.
 
@@ -94,6 +94,23 @@ Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros 
 - **Rollback e estado final:** cartão pronto para boot externo; nenhum dado da TX9 alterado.
 - **Gate aprovado?** SIM (F1).
 - **Próximo experimento:** operador desligar a TX9, inserir o cartão, conectar Ethernet e ligar. Se o Android iniciar, desligar e repetir mantendo o botão de reset pressionado. Localizar o lease DHCP do Armbian, entrar por SSH (`root`/`1234`) e trocar a senha imediatamente. Depois executar `scripts/diagnostics.sh` e as verificações read-only do `PLAN.md` (F2). Nenhuma alteração de eMMC/bootloader antes do F2.
+
+## Registro 007 — 2026-11-25 — F2: tentativa de identificar o boot sem HDMI
+
+- **Fase:** F2 — em andamento.
+- **Objetivo / hipótese:** determinar se a TX9 iniciou Armbian ou Android sem depender do HDMI (conhecido como não confiável em `docs/hardware.md`).
+- **Equipamento / sistema onde o comando rodou:** host CachyOS x86-64 na mesma rede local da TX9. Nenhum comando executado na TX9; nenhum login tentado em outros dispositivos.
+- **Comandos executados (somente leitura):** `ip neigh show dev enp8s0`; varredura de porta 22 em `192.168.0.0/24` via `/dev/tcp` com timeout; leitura do banner SSH de cada host; varredura das portas 23/80/443/5555/8008/8009/8080/9090 nos hosts encontrados; `avahi-resolve -n armbian.local`; `avahi-browse -at`; `adb connect` + `getprop` nos hosts com porta 5555 aberta.
+- **Resultado observado / evidência:**
+  - `armbian.local` não resolve por mDNS; `avahi-browse` não anuncia nenhum host Armbian/SSH.
+  - Porta 22 aberta apenas em: este host (`SSH-2.0-OpenSSH_10.6`), `192.168.0.101` e `192.168.0.250` (`SSH-2.0-OpenSSH_10.0p2 Debian-7+deb13u4`) e `192.168.0.206` (`SSH-2.0-OpenSSH_6.6.0`). Nenhum banner corresponde ao OpenSSH do Armbian Noble esperado.
+  - `192.168.0.101` e `192.168.0.250` também têm porta 5555 (ADB) aberta, mas `adb connect` retornou `device offline` em ambos — não foi possível identificá-los como a TX9.
+  - `192.168.0.206` responde HTTP (22/80/443), com banner SSH antigo — provável outro aparelho da rede, não o servidor recém-instalado.
+  - O cartão não está mais no leitor USB do host (`/dev/sdd` desapareceu), indicando que foi removido para inserção na TX9.
+- **Falhas / limitações:** HDMI inoperante impede confirmação visual; não há acesso à tabela de DHCP do roteador a partir deste host. A varredura de porta é passiva (sem autenticação), mas não consegue distinguir dispositivos sem banner reconhecível.
+- **Rollback e estado final:** nenhuma alteração feita; nenhum login tentado. Nenhum host Armbian detectado até o momento.
+- **Gate aprovado?** NÃO (F2).
+- **Próximo experimento:** operador deve desligar a TX9, ligar mantendo o botão de reset pressionado (o botão pequeno próximo à silk `OTG` visto nas fotos) por ~10–20 s, e então avisar. O agente repete a varredura de rede. Se ainda não houver host Armbian, trocar para cartão de 16/32 GB (risco SDXC) ou, em último caso, retirar o cartão e montar o rootfs somente-leitura no host para procurar evidências de boot/resize.
 
 ## Modelo para novos registros
 
