@@ -1,6 +1,6 @@
 # Experiment log — S905W Pumpkin Server
 
-**Última situação comprovada:** F0 concluída; F1 em andamento. Imagem Armbian baixada e verificada; primeira gravação do microSD falhou por desconexão USB do leitor (aprox. 18 MB gravados). Nova tentativa pendente de troca de porta/leitor e do script endurecido.
+**Última situação comprovada:** F0 concluída; F1 em andamento. Imagem Armbian baixada e verificada; duas gravações falharam por desconexão USB do leitor. Na segunda tentativa o link `by-id` desapareceu durante a re-enumeração e o `dd` gravou a imagem em um **arquivo regular dentro de `/dev`**, não no cartão. O cartão continua com imagem parcial. Pendente: remover o arquivo espúrio, trocar leitor/porta/cartão e repetir a gravação com script corrigido.
 
 Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros detalhes pessoais devem ser sanitizados antes do commit.
 
@@ -59,6 +59,24 @@ Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros 
 - **Rollback e estado final:** cartão com imagem parcial (cerca de 17 MiB do início e tabela de partições reescrita). **Não tentar boot nem considerar F1 concluído**: é necessária uma regravação completa. Nenhum dado do host ou da TX9 foi alterado.
 - **Gate aprovado?** NÃO (F1).
 - **Próximo experimento:** operador reassentar o cartão e trocar o leitor/porta USB (de preferência outra porta direta, sem hub); então executar `sudo bash /tmp/opencode/armbian/write-sd-v2.sh`. Se a desconexão se repetir, trocar o cartão e/ou o leitor antes de formular qualquer outra hipótese.
+
+## Registro 005 — 2026-11-25 10:39 — F1: falsa gravação concluída; imagem escrita em arquivo dentro de /dev
+
+- **Fase:** F1 — falha (diagnóstico de causa raiz).
+- **Objetivo / hipótese:** verificar a gravação da v2; investigar por que `lsblk` não mostrava `FSTYPE` nas partições do cartão.
+- **Equipamento / sistema onde o comando rodou:** host CachyOS x86-64; leitor USB GEMBIRD `1908:0226` em `usb 1-9`, SCSI `host8`. Comandos do operador com `sudo`; leituras do agente sem root. Nenhum comando executado na TX9.
+- **Comandos executados (sem segredos):** `sudo bash /tmp/opencode/armbian/write-sd-v2.sh`; `sudo bash /tmp/opencode/armbian/verify-sd.sh`; `lsblk -f /dev/sdd`; `udevadm info --query=all --name=/dev/sdd1|2`; `stat /dev/disk/by-id/usb-Generic_Mass-Storage-0:0`; `df -h /dev`; `gzip -dc IMG | leitura Python dos primeiros bytes`; `journalctl -k --since '-40 min'`.
+- **Resultado observado / evidência:**
+  - A v2 reportou `Escrita em buffer concluida` e `3686793216 bytes (3,4 GiB) copied, 10,5975 s, 348 MB/s` — exatamente o tamanho esperado da imagem descomprimida. Depois abortou em `ABORTADO: particao FAT de boot nao encontrada`.
+  - `lsblk -f /dev/sdd` mostrou `sdd1` e `sdd2` sem `FSTYPE`. `udevadm info` confirmou `ID_PART_ENTRY_TYPE=0xc`, offset 8192, tamanho 1046528 em `sdd1` e `ID_PART_ENTRY_TYPE=0x83`, offset 1056768, tamanho 6144000 em `sdd2` — ou seja, a tabela de partições da imagem estava presente, mas os sistemas de arquivos não.
+  - A imagem local foi inspecionada diretamente: MBR com partição 1 `0x0c` @8192/1046528 e partição 2 `0x83` @1056768/6144000; boot com `FAT32   ` em `0x52` e rótulo `mkfs.fat`; rootfs com magic `53ef` em `0x38`. A imagem está íntegra.
+  - `verify-sd.sh` abortou com `ABORTADO: /dev/disk/by-id/usb-Generic_Mass-Storage-0:0 nao e um bloco`.
+  - `stat` revelou a causa: `/dev/disk/by-id/usb-Generic_Mass-Storage-0:0` é um **arquivo regular de 3.686.793.216 bytes**, e não um symlink. `df -h /dev` mostrou 3,5 GB usados em devtmpfs. Enquanto `*-part1` e `*-part2` continuam sendo symlinks para `sdd1`/`sdd2`, o link do disco inteiro foi substituído por arquivo.
+  - `journalctl -k` explica o mecanismo: novas desconexões em 10:38:47 (device 30), 10:38:58 (device 31), 10:39:28 (device 32) e re-enumeração em 10:38:56, 10:38:59 e 10:39:31. Durante a re-enumeração o udev remove o symlink `by-id`; a primeira tentativa de `dd` com `oflag=direct` falhou, e a **repetição automática** abriu o caminho já sem symlink, criando um arquivo regular dentro de `/dev` e gravando a imagem nele (em RAM), não no cartão.
+- **Falhas / limitações:** o retry automático da v2 transformou uma falha de hardware em uma falsa confirmação de sucesso. A contagem de bytes do `dd` sozinha não prova que o alvo era o disco. O leitor apresenta desconexões intermitentes mesmo fora de carga de escrita;trocar apenas a porta não resolveu. Hipótese atual: leitor/cabo/contato do adaptador com falha; testar outro leitor e outro cartão antes de qualquer nova tentativa.
+- **Rollback e estado final:** nenhum dado da TX9 foi alterado. O cartão segue com apenas os ~17 MiB da primeira tentativa + tabela de partições: **inutilizável para boot**. Arquivo espúrio de 3,4 GB em `/dev/disk/by-id/usb-Generic_Mass-Storage-0:0` precisa ser removido pelo operador (comando em `/tmp/opencode/armbian/...`, sem root para o agente). Nenhum boot tentado.
+- **Gate aprovado?** NÃO (F1).
+- **Próximo experimento:** (1) remover o arquivo regular: `sudo rm -f -- /dev/disk/by-id/usb-Generic_Mass-Storage-0:0`; (2) usar outro leitor de cartão e outra porta USB direta, ou outro cartão (16/32 GB); (3) executar script v3, que grava em `/dev/sdd` (nunca em caminho `by-id`), não repete automaticamente após desconexão e exige `blkid` com `vfat`/`ext4` antes de considerar a gravação concluída.
 
 ## Modelo para novos registros
 
