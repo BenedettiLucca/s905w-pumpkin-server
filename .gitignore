@@ -1,0 +1,30 @@
+# Segredos e arquivos locais
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.kdbx
+.ssh/
+# Firmware e imagens
+*.img
+*.img.gz
+*.iso
+*.bin
+*.dump
+*.dd
+# Mundo e logs do Pumpkin
+world/
+worlds/
+backups/
+server-data/
+logs/
+*.log
+*.sqlite
+*.db
+# Editor/sistema
+.DS_Store
+.vscode/
+.idea/
+__pycache__/
