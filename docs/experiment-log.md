@@ -148,6 +148,23 @@ Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros 
 - **Gate aprovado?** SIM para o objetivo deste registro (mídia de dados); F2 permanece NÃO.
 - **Próximo experimento:** operador insere o microSD de 16 GB no leitor; agente identifica o dispositivo somente-leitura e o operador executa `sudo bash /tmp/opencode/armbian/write-sd-16g.sh`, que grava a mesma imagem com hashes e verificações rígidas (destino `/dev/sdd`, sem retry automático, `blkid` vfat/ext4 obrigatório).
 
+## Registro 010 — 2026-11-25 12:02 -03 — F1 em cartão de 16 GB: falha antes da gravação
+
+- **Fase:** F1 — em andamento (nova tentativa com microSD de 16 GB).
+- **Objetivo / hipótese:** repetir a gravação verificada da imagem em um cartão menor, para isolar o risco de boot de cartões SDXC >32 GB. Hipótese alternativa: o próprio leitor USB está causando falhas, independentemente do cartão.
+- **Equipamento / sistema onde o comando rodou:** host CachyOS x86-64; leitor GEMBIRD `1908:0226`; alvo `/dev/sdd` (15,2 GiB / 16.358.834.176 bytes, `removable=1`, três partições não reconhecidas); comando executado pelo operador com `sudo`.
+- **Comandos executados (sem segredos):** `sudo bash /tmp/opencode/armbian/write-sd-16g.sh`; leitura posterior de `/tmp/opencode/armbian/write-16g-failure-klog.txt` e verificação somente-leitura dos guards.
+- **Resultado observado / evidência:**
+  - Saída visível: apenas `Falha (codigo 1). Log do kernel salvo em /tmp/opencode/armbian/write-16g-failure-klog.txt`.
+  - **Nenhum arquivo `/tmp/opencode/armbian/dd-write-16g.log` foi criado** — portanto o script parou antes do `dd`; o cartão não foi modificado nesta tentativa.
+  - O kernel log registra desconexões repetidas do leitor mesmo sem escrita: 11:54:37 (usb 1-3), 11:58:07 (1-3), 12:00:06 (capacidade caiu para 0), 12:00:15 (1-3), 12:02:00 (1-9) e 12:02:19 (1-9, `Read Capacity(10) failed`, 0 blocos), com reenumeração em 1-8 às 12:02:23.
+  - Verificação somente-leitura feita depois: imagem íntegra (SHA-256 `de7440731c…d77fd7f`), `/dev/sdd` com 16.358.834.176 bytes, `removable=1`, `by-id` ainda é symlink correto, nenhuma partição montada e todos os guards passam agora.
+  - Para comparação, a gravação v3 bem-sucedida no cartão de 64 GB ocorreu em `usb 1-8` sem desconexões entre ~11:00 e 11:05.
+- **Falhas / limitações:** sem a linha `ABORTADO:` completa do operador não é possível dizer qual guard específico disparou; a evidência de desconexões contínuas no momento da execução é a causa mais provável. O leitor GEMBIRD já havia mostrado o mesmo comportamento na F1 (Registros 004 e 005).
+- **Rollback e estado final:** nenhuma alteração no cartão de 16 GB nem na TX9. Nenhum dado perdido.
+- **Gate aprovado?** NÃO (F1 com o cartão de 16 GB).
+- **Próximo experimento:** operador deve trocar o leitor de cartão (ou usar porta USB diferente e estável, de preferência a `1-8` que funcionou na v3), reconectar e pedir nova identificação somente-leitura. Antes de reexecutar, informar a linha `ABORTADO:` completa, se houver. Não repetir a gravação enquanto o leitor continuar se desconectando a cada ~2 minutos.
+
 ## Modelo para novos registros
 
 ### YYYY-MM-DD HH:MM TZ — título
