@@ -1,6 +1,6 @@
 # Experiment log — S905W Pumpkin Server
 
-**Última situação comprovada:** F0 concluída; F1 em andamento. Imagem Armbian baixada e verificada; duas gravações falharam por desconexão USB do leitor. Na segunda tentativa o link `by-id` desapareceu durante a re-enumeração e o `dd` gravou a imagem em um **arquivo regular dentro de `/dev`**, não no cartão. O cartão continua com imagem parcial. Pendente: remover o arquivo espúrio, trocar leitor/porta/cartão e repetir a gravação com script corrigido.
+**Última situação comprovada:** F0 e F1 concluídas. Duas gravações falharam por desconexão USB do leitor (na segunda, a imagem foi gravada por engano em um arquivo regular dentro de `/dev`); a terceira tentativa, com outro leitor/porta e script sem retry, gravou e verificou a imagem com sucesso. `uEnv.txt` aponta para `meson-gxl-s905w-tx3-mini.dtb`, o DTB existe e `u-boot.ext` está ausente. Próximo: primeiro boot externo e coleta de evidências do F2. Nenhuma alteração na eMMC/bootloader da TX9.
 
 Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros detalhes pessoais devem ser sanitizados antes do commit.
 
@@ -77,6 +77,23 @@ Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros 
 - **Rollback e estado final:** nenhum dado da TX9 foi alterado. O cartão segue com apenas os ~17 MiB da primeira tentativa + tabela de partições: **inutilizável para boot**. Arquivo espúrio de 3,4 GB em `/dev/disk/by-id/usb-Generic_Mass-Storage-0:0` precisa ser removido pelo operador (comando em `/tmp/opencode/armbian/...`, sem root para o agente). Nenhum boot tentado.
 - **Gate aprovado?** NÃO (F1).
 - **Próximo experimento:** (1) remover o arquivo regular: `sudo rm -f -- /dev/disk/by-id/usb-Generic_Mass-Storage-0:0`; (2) usar outro leitor de cartão e outra porta USB direta, ou outro cartão (16/32 GB); (3) executar script v3, que grava em `/dev/sdd` (nunca em caminho `by-id`), não repete automaticamente após desconexão e exige `blkid` com `vfat`/`ext4` antes de considerar a gravação concluída.
+
+## Registro 006 — 2026-11-25 11:05 -03 — F1: gravação concluída e verificada
+
+- **Fase:** F1 — concluída (gate SIM).
+- **Objetivo / hipótese:** gravar a imagem Armbian no microSD de forma confiável após trocar o leitor/porta e corrigir o script.
+- **Equipamento / sistema onde o comando rodou:** host CachyOS x86-64; alvo `/dev/sdd` via `/dev/disk/by-id/usb-Generic_Mass-Storage-0:0`; comando executado pelo operador com `sudo`. Nenhum comando executado na TX9.
+- **Comandos executados (sem segredos):** `sudo bash /tmp/opencode/armbian/write-sd-v3.sh`.
+- **Versões / hashes:** imagem `Armbian_26.11.0_amlogic_s905w_noble_6.12.117_server_2026.11.14.img.gz`, SHA-256 `de7440731ca4bec802ab97dba20dd4464d56de5d6ae2796cdef2ea674d77fd7f` (conferida novamente pelo script); 3.686.793.216 bytes após descompactar.
+- **Resultado observado / evidência:**
+  - `dd` concluiu `3686793216 bytes (3,4 GiB) copied, 314,9 s, 11,7 MB/s` sem erro; leitura lenta, porém estável — sem novas desconexões.
+  - `lsblk` pós-gravação: `sdd1` 511M `vfat` com label `BOOT`; `sdd2` 2,9G `ext4` com label `ROOTFS`.
+  - `uEnv.txt`: `LINUX=/zImage`, `INITRD=/uInitrd`, `FDT=/dtb/amlogic/meson-gxl-s905w-tx3-mini.dtb`, `APPEND=root=UUID=dd113b2d-8662-491b-bc1e-04f849968eb2 … console=ttyAML0,115200n8 …`.
+  - `dtb/amlogic/meson-gxl-s905w-tx3-mini.dtb` presente (42.147 bytes); `u-boot.ext` ausente, conforme esperado. Boot contém `s905_autoscript`, `aml_autoscript`, `u-boot.sd`, `zImage`, `uInitrd`.
+- **Falhas / limitações:** nenhuma nesta tentativa. A v3 gravou em `/dev/sdd` (nunca no symlink), não repetiu automaticamente após desconexão e exigiu `blkid` `vfat`/`ext4` antes de montar o boot somente-leitura.
+- **Rollback e estado final:** cartão pronto para boot externo; nenhum dado da TX9 alterado.
+- **Gate aprovado?** SIM (F1).
+- **Próximo experimento:** operador desligar a TX9, inserir o cartão, conectar Ethernet e ligar. Se o Android iniciar, desligar e repetir mantendo o botão de reset pressionado. Localizar o lease DHCP do Armbian, entrar por SSH (`root`/`1234`) e trocar a senha imediatamente. Depois executar `scripts/diagnostics.sh` e as verificações read-only do `PLAN.md` (F2). Nenhuma alteração de eMMC/bootloader antes do F2.
 
 ## Modelo para novos registros
 
