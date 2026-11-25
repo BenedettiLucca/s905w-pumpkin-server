@@ -22,6 +22,23 @@ Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros 
 - **Gate aprovado?** NÃO (F1 com o cartão de 16 GB).
 - **Próximo experimento:** operador executa `sudo bash /tmp/opencode/armbian/write-sd-16g-sde.sh` novamente e cola a saída completa, inclusive eventual `ABORTADO:`. Esperado: `3686793216 bytes` copiados, `FDT=/dtb/amlogic/meson-gxl-s905w-tx3-mini.dtb`, sem `u-boot.ext`.
 
+## Registro 012 — 2026-11-25 12:40 -03 — F1 em 16 GB: contagem de bytes enganosa, dados não chegaram ao cartão
+
+- **Fase:** F1 — em andamento (microSD de 16 GB).
+- **Objetivo / hipótese:** determinar se a gravação lenta no novo leitor NORELSYS realmente gravou a imagem, depois de `dd` ter reportado a contagem completa sem aparecerem partições. Hipóteses: cartão falsificado/defeituoso que reporta capacidade maior que a real, ou controlador do leitor que aceita escrita mas devolve dados sintéticos na leitura.
+- **Equipamento / sistema onde o comando rodou:** host CachyOS x86-64; leitor NORELSYS `2537:1081` em `usb 1-3.2.4` atrás de hub GenesysLogic; cartão de 16 GB em `/dev/sde` (16.358.834.176 bytes, `removable=1`); comandos executados pelo operador com `sudo`. Nenhum comando executado na TX9.
+- **Versões / hashes:** imagem `Armbian_26.11.0_amlogic_s905w_noble_6.12.117_server_2026.11.14.img.gz`, SHA-256 `de7440731c…d77fd7f`, 3.686.793.216 bytes descomprimidos. `by-id`: `/dev/disk/by-id/usb-NORELSYS_1081CS0_0123456789ABCDE-0:0 -> ../../sde`.
+- **Comandos executados (sem segredos):** `sudo bash /tmp/opencode/armbian/write-sd-16g-sde.sh`, `sudo bash /tmp/opencode/armbian/check-16g-partition.sh`, `sudo bash /tmp/opencode/armbian/probe-16g.sh`; leitura de `/tmp/opencode/armbian/dd-write-16g-sde.log` e `journalctl -k`.
+- **Resultado observado / evidência:**
+  - `dd` terminou: `3686793216 bytes (3,7 GB, 3,4 GiB) copied, 2718,78 s, 1,4 MB/s` — 45 minutos a 1,4 MB/s. Nenhuma entrada no log do kernel nos 10 minutos seguintes.
+  - Após a gravação, `lsblk -f /dev/sde` mostra apenas `sde`, sem `sde1`/`sde2`. `blockdev --rereadpt` e `partx -u` não fizeram as partições aparecerem; script abortou com `/dev/sde1 nao apareceu apos releitura`.
+  - O setor 0 do cartão contém `812d 0000 822d 0000 832d 0000 … a02d 0000`: um contador little-endian crescente a partir de `0x2d81`, sem assinatura `55 aa` e sem entradas de partição. O setor 1 começa em `0x2e01`, o setor 8192 em `0x2f81`; outros setores lidos voltaram zeros.
+  - Comparação com a imagem descomprimida no host: setor 0 = `fa b8 00 10 8e d0 bc 00 b0…`, setor 8192 = `eb 58 90 6d 6b 66 73 2e 66 61 74…` (FAT32), setor 1056770 = `00 ee 02 00 00 b8 0b 00…`. Portanto os dados da imagem **não** estão no cartão, apesar da contagem de bytes do `dd`.
+- **Falhas / limitações:** não é possível distinguir, com este leitor, se o defeito é do cartão ou do controlador USB. A taxa de 1,4 MB/s e o padrão sintético são fortes indícios de mídia falsificada/controlador que não retorna dados reais. O resultado negativo é conclusivo: este cartão não é confiável para boot.
+- **Rollback e estado final:** cartão de 16 GB agora contém dados inválidos (sem valor a preservar); TX9 intacta; nenhuma alteração em eMMC/bootloader.
+- **Gate aprovado?** NÃO (F1 com este cartão de 16 GB).
+- **Próximo experimento:** teste somente-leitura com o cartão de 64 GB (conhecido como bom, formatado em exFAT) no mesmo leitor NORELSYS — se o setor 0/partição exFAT for lido corretamente, o leitor está bom e o cartão de 16 GB é falso; se também retornar padrão, trocar o leitor. Em paralelo, usar porta USB traseira direta (sem hub) para qualquer nova gravação.
+
 ## Registro 001 — 2026-11-24 — Preparação do repositório
 
 - **Fase:** F0 — planejada.
