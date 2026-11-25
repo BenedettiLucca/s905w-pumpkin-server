@@ -39,6 +39,21 @@ Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros 
 - **Gate aprovado?** NÃO (F1 com este cartão de 16 GB).
 - **Próximo experimento:** teste somente-leitura com o cartão de 64 GB (conhecido como bom, formatado em exFAT) no mesmo leitor NORELSYS — se o setor 0/partição exFAT for lido corretamente, o leitor está bom e o cartão de 16 GB é falso; se também retornar padrão, trocar o leitor. Em paralelo, usar porta USB traseira direta (sem hub) para qualquer nova gravação.
 
+## Registro 013 — 2026-11-25 12:55 -03 — Leitor NORELSYS confirmado bom; cartão de 16 GB descartado
+
+- **Fase:** F1 — diagnóstico de mídia.
+- **Objetivo / hipótese:** separar falha do leitor de falha do cartão, lendo somente-leitura um cartão conhecido como bom (64 GB, exFAT `ROMS`) no mesmo leitor NORELSYS usado na gravação que falhou.
+- **Equipamento / sistema onde o comando rodou:** host CachyOS x86-64; leitor NORELSYS `2537:1081` (`1081CS0`) em `usb 1-3.2.4`, atrás de hub; cartão de 64 GB em `/dev/sde` (63.864.569.856 bytes). Nenhum comando executado na TX9.
+- **Comandos executados (sem segredos):** `sudo bash /tmp/opencode/armbian/check-64g-in-reader.sh` (varredura de discos removíveis por tamanho; leitura dos setores 0 e 2048; `strings` no setor 2048). Nenhuma escrita.
+- **Resultado observado / evidência:**
+  - `Cartao identificado: /dev/sde`.
+  - Setor 0 = `fa b8 00 10 8e d0 bc 00 b0 b8 00 00 8e d8 8e c0 f3 be 00 7c bf 00 06 …` — MBR válido, idêntico ao esperado para o cartão gravado.
+  - Setor 2048 = `eb 76 90 45 58 46 41 54 20 20 20 …` e `strings` retornou `EXFAT   ` — boot sector exFAT íntegro, exatamente o criado em `mkfs.exfat -n ROMS` (Registro 009).
+- **Falhas / limitações:** nenhuma nesta leitura. A conclusão é indireta mas forte: o leitor e o hub conseguem ler dados reais corretamente, portanto o padrão de contador visto no cartão de 16 GB (Registro 012) é defeito daquele cartão, não do leitor.
+- **Rollback e estado final:** nenhuma alteração em nenhum cartão; cartão de 64 GB permanece formatado em exFAT com label `ROMS`; TX9 intacta.
+- **Gate aprovado?** NÃO (F1/F2 ainda pendentes).
+- **Próximo experimento:** obter um microSD de 16 ou 32 GB **genuíno** (marca conhecida, fornecedor confiável) e repetir a gravação com `sudo bash /tmp/opencode/armbian/write-sd-16g-sde.sh` (ajustando o dispositivo após identificação somente-leitura). O cartão de 16 GB atual deve ser descartado — não é confiável mesmo para ROMs.
+
 ## Registro 001 — 2026-11-24 — Preparação do repositório
 
 - **Fase:** F0 — planejada.
