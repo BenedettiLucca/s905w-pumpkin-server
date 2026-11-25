@@ -1,6 +1,6 @@
 # Experiment log — S905W Pumpkin Server
 
-**Última situação comprovada:** F0 concluída; F1 em preparação. Imagem Armbian baixada e verificada; gravação do microSD pendente apenas da execução pelo operador (sudo).
+**Última situação comprovada:** F0 concluída; F1 em andamento. Imagem Armbian baixada e verificada; primeira gravação do microSD falhou por desconexão USB do leitor (aprox. 18 MB gravados). Nova tentativa pendente de troca de porta/leitor e do script endurecido.
 
 Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros detalhes pessoais devem ser sanitizados antes do commit.
 
@@ -39,9 +39,26 @@ Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros 
 - **Comandos executados:** `lsblk`, `findmnt`, leitura de `/sys/block/sdd/*`, `curl -fL` da URL da release, `sha256sum` da imagem.
 - **Resultado observado / evidência:** `sha256sum` local = `de7440731ca4bec802ab97dba20dd4464d56de5d6ae2796cdef2ea674d77fd7f`, idêntico ao valor informado pela API. Tamanho local = 1.188.260.349 bytes. Não foi criado filesystem no cartão: a imagem já contém tabela de partições, partição FAT de boot e rootfs ext4.
 - **Falhas / limitações:** o host exige senha para `sudo`, então a gravação não pôde ser executada pelo agente; foi preparado o script com guardas em `/tmp/opencode/armbian/write-sd.sh` para execução pelo operador. Risco conhecido: alguns bootloaders Amlogic não iniciam com cartões SDXC >32 GB; se isso ocorrer, testar cartão de 16/32 GB antes de suspeitar do DTB.
-- **Rollback e estado final:** nenhuma escrita realizada até aqui; cartão intacto.
-- **Gate aprovado?** INDETERMINADO (F1 depende da gravação e da leitura do `uEnv.txt`).
-- **Próximo experimento:** operador executar `sudo bash /tmp/opencode/armbian/write-sd.sh`; em seguida montar a partição FAT e conferir `uEnv.txt` e o DTB.
+- **Rollback e estado final:** a escrita foi iniciada pelo operador e abortada por erro de E/S (ver Registro 004); cartão parcialmente regravado, inutilizável até uma nova gravação completa.
+- **Gate aprovado?** NÃO (F1 depende da gravação e da leitura do `uEnv.txt`).
+- **Próximo experimento:** ver Registro 004.
+
+## Registro 004 — 2026-11-25 10:35 — F1: falha de gravação por desconexão USB
+
+- **Fase:** F1 — falha.
+- **Objetivo / hipótese:** gravar a imagem Armbian no microSD; investigar o `Input/output error` antes de repetir a escrita.
+- **Equipamento / sistema onde o comando rodou:** host CachyOS x86-64; leitor USB GEMBIRD `1908:0226` em `usb 1-9`, SCSI `host8`, alvo `/dev/sdd` via `/dev/disk/by-id/usb-Generic_Mass-Storage-0:0`. Comando executado pelo operador com `sudo` na própria sessão. Nenhum comando executado na TX9.
+- **Comandos executados (sem segredos):** `sudo bash /tmp/opencode/armbian/write-sd.sh`; em seguida leitura somente-leitura de `lsblk`, `journalctl -k` e `/sys/block/sdd/*`.
+- **Resultado observado / evidência:**
+  - O script passou por todas as guardas: `Alvo confirmado: /dev/sdd (63864569856 bytes), imagem verificada.` Portanto alvo e SHA-256 estavam corretos.
+  - `dd` copiou apenas `17891328 bytes (17 MiB)` em `0,201357 s` e terminou com `Input/output error` e `fsync failed`.
+  - `journalctl -k` mostra, no mesmo segundo (10:35:15): `usb 1-9: USB disconnect, device number 29`, seguido de `device offline error, dev sdd, sector 4560 op 0x1:(WRITE)` (e setores 4800–6544) e `Buffer I/O error ... logical block 570..579, lost async page write`. Depois, `usb 1-9: new high-speed USB device number 30` e, às 10:35:17, `sd 8:0:0:0: [sdd] 124735488 512-byte logical blocks`, `Write Protect is off`, `sdd: sdd1 sdd2`.
+  - Após a falha, `lsblk` mostra `sdd1` 511M e `sdd2` 2,9G: a tabela de partições da imagem chegou a ser gravada. Isso confirma que o dispositivo é gravável e que a falha foi de conexão, não de *write-protect* nem de imagem corrompida.
+  - O mesmo leitor já havia apresentado desconexão e re-enumeração (device 28 → 29) em 10:19:15–16, antes da gravação. Padrão de desconexão física intermitente.
+- **Falhas / limitações:** hipótese mais provável = leitor, cabo ou porta USB instável sob carga de escrita (desconexão real no barramento). Não há evidência de falha da imagem, do DTB ou do alvo. O script original usava `bs=4M` com cache de página; a versão seguinte usa blocos de 1 MiB, uma única repetição em modo buffer, verificação da contagem total de bytes e salva o log do kernel em caso de falha. Como o script abortou no `dd`, a leitura do `uEnv.txt` não chegou a acontecer.
+- **Rollback e estado final:** cartão com imagem parcial (cerca de 17 MiB do início e tabela de partições reescrita). **Não tentar boot nem considerar F1 concluído**: é necessária uma regravação completa. Nenhum dado do host ou da TX9 foi alterado.
+- **Gate aprovado?** NÃO (F1).
+- **Próximo experimento:** operador reassentar o cartão e trocar o leitor/porta USB (de preferência outra porta direta, sem hub); então executar `sudo bash /tmp/opencode/armbian/write-sd-v2.sh`. Se a desconexão se repetir, trocar o cartão e/ou o leitor antes de formular qualquer outra hipótese.
 
 ## Modelo para novos registros
 
