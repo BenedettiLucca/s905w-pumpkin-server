@@ -1,8 +1,22 @@
 # Experiment log — S905W Pumpkin Server
 
-**Última situação comprovada:** F0 e F1 concluídas; F2 em andamento. O cartão de 64 GB foi gravado e verificado com sucesso, mas o HDMI da TX9 não funciona e o proprietário não consegue confirmar visualmente o boot. Varredura somente-leitura da rede local não encontrou host Armbian novo, e o reset não mudou o resultado (Registros 007–008). Por decisão do proprietário, o cartão de 64 GB foi formatado em exFAT para armazenamento de ROMs (Registro 009) e o próximo teste usará um microSD de 16 GB. Nenhuma alteração na eMMC/bootloader da TX9.
+**Última situação comprovada:** F0 e F1 concluídas em um cartão de 64 GB; F2 em andamento. O HDMI da TX9 não funciona e o proprietário não consegue confirmar visualmente o boot. Varredura somente-leitura da rede local não encontrou host Armbian novo, e o reset não mudou o resultado (Registros 007–008). Por decisão do proprietário, o primeiro cartão de 64 GB foi formatado em exFAT para ROMs (Registro 009); o cartão de 16 GB foi descartado como defeituoso/falsificado (Registros 010–013). O proprietário conectou um **segundo cartão de 64 GB** para nova tentativa (Registro 014). Nenhuma alteração na eMMC/bootloader da TX9.
 
 Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros detalhes pessoais devem ser sanitizados antes do commit.
+
+## Registro 014 — 2026-11-25 13:25 -03 — F1: segundo cartão de 64 GB identificado antes da gravação
+
+- **Fase:** F1 — em andamento (nova mídia).
+- **Objetivo / hipótese:** substituir o cartão de 16 GB descartado por um segundo cartão de 64 GB fornecido pelo proprietário, mantendo a mesma imagem e as verificações rígidas. Hipótese: este outro cartão pode ser íntegro (o leitor NORELSYS já foi comprovadamente bom no Registro 013).
+- **Equipamento / sistema onde o comando rodou:** host CachyOS x86-64; leitor NORELSYS `1081CS0` em `usb 1-3.2.4` (atrás de hub), alvo `/dev/sde`, 122.138.624 setores de 512 bytes = 62.534.935.488 bytes (58,2 GiB), `removable=1`. Nenhum comando executado na TX9.
+- **Identificação somente-leitura:** `lsblk` mostrou três partições: `sde1` vfat 512M label `EMUELEC`, `sde2` ext4 2G label `STORAGE`, `sde3` vfat 55,5G. Esse layout é diferente do primeiro cartão de 64 GB (que era exFAT `ROMS` de partição única) e do cartão de 16 GB descartado, confirmando que é uma mídia nova. `by-id`: `/dev/disk/by-id/usb-NORELSYS_1081CS0_0123456789ABCDE-0:0 -> ../../sde`.
+- **Kernel log:** uma desconexão em 13:21:56 e reenumeração em 13:22:04 no mesmo hub; depois disso o cartão apareceu de forma estável. Recomendação registrada: usar porta USB traseira direta, sem hub, antes da gravação.
+- **Decisão do proprietário:** autorizou explicitamente apagar as partições `EMUELEC`/`STORAGE` deste cartão para gravar a imagem Armbian (confirmação via ferramenta de pergunta, 2026-11-25).
+- **Script preparado:** `/tmp/opencode/armbian/write-sd-64b-sde.sh` (validação `bash -n` OK) resolve o dispositivo pelo `by-id`, exige tamanho exato 62.534.935.488 bytes, `removable=1`, sem montagens, SHA-256 `de7440731c…d77fd7f`, 3.686.793.216 bytes descomprimidos, **sem retry automático**, e só declara sucesso após `blkid` vfat/ext4 e leitura de `uEnv.txt` com `FDT=/dtb/amlogic/meson-gxl-s905w-tx3-mini.dtb`.
+- **Falhas / limitações:** gravação ainda não executada; o hub ainda apresentou uma desconexão recente.
+- **Rollback e estado final:** nenhuma alteração neste cartão nem na TX9 até o momento.
+- **Gate aprovado?** INDETERMINADO (F1 depende da gravação verificada). F2 permanece NÃO.
+- **Próximo experimento:** operador move o leitor para porta USB traseira direta (ou confirma que a conexão atual está estável), executa `sudo bash /tmp/opencode/armbian/write-sd-64b-sde.sh` e cola a saída completa.
 
 ## Registro 011 — 2026-11-25 12:18 -03 — Nova tentativa em 16 GB: aborto silencioso por bug no script
 
