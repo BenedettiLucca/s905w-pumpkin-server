@@ -1,6 +1,6 @@
 # Experiment log — S905W Pumpkin Server
 
-**Última situação comprovada:** F0 e F1 concluídas; F2 em andamento. O cartão foi gravado e verificado com sucesso, mas o HDMI da TX9 não funciona e o proprietário não consegue confirmar visualmente o boot. Varredura somente-leitura da rede local não encontrou host Armbian novo (ver Registro 007); hipótese atual = Android iniciou ou o Armbian não obteve rede. Próximo: repetir o boot mantendo o botão de reset pressionado. Nenhuma alteração na eMMC/bootloader da TX9.
+**Última situação comprovada:** F0 e F1 concluídas; F2 em andamento. O cartão foi gravado e verificado com sucesso, mas o HDMI da TX9 não funciona e o proprietário não consegue confirmar visualmente o boot. Varredura somente-leitura da rede local não encontrou host Armbian novo, e o reset não mudou o resultado (Registros 007–008). Hipótese atual: o U-Boot da placa pode exigir `u-boot.ext` (o FAQ oficial cita TX3 Mini/S905W);preparação do arquivo e próximo teste no Registro 008. Nenhuma alteração na eMMC/bootloader da TX9.
 
 Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros detalhes pessoais devem ser sanitizados antes do commit.
 
@@ -111,6 +111,26 @@ Use uma seção para cada experimento. Logs com IPs, usernames, tokens e outros 
 - **Rollback e estado final:** nenhuma alteração feita; nenhum login tentado. Nenhum host Armbian detectado até o momento.
 - **Gate aprovado?** NÃO (F2).
 - **Próximo experimento:** operador deve desligar a TX9, ligar mantendo o botão de reset pressionado (o botão pequeno próximo à silk `OTG` visto nas fotos) por ~10–20 s, e então avisar. O agente repete a varredura de rede. Se ainda não houver host Armbian, trocar para cartão de 16/32 GB (risco SDXC) ou, em último caso, retirar o cartão e montar o rootfs somente-leitura no host para procurar evidências de boot/resize.
+
+## Registro 008 — 2026-11-25 11:45 -03 — F2: por que o Android continua vencendo o boot
+
+- **Fase:** F2 — em andamento.
+- **Objetivo / hipótese:** identificar uma causa acionável para o boot continuar caindo no Android apesar de o cartão estar gravado e verificado, sem acesso a HDMI. Hipótese trabalhada: o script de boot da imagem espera `u-boot.ext` em alguns modelos; o FAQ oficial da Armbian cita explicitamente o TX3 Mini/S905W como exemplo de placa que precisa copiar `u-boot-s905x-s912.bin` para `u-boot.ext`.
+- **Equipamento / sistema onde o comando rodou:** host CachyOS x86-64 (somente leitura) e resultado do operador na TX9. Nenhum comando executado na TX9; nenhuma alteração em eMMC/bootloader.
+- **Versões / URLs / SHA-256:**
+  - Documentação upstream consultada: `https://raw.githubusercontent.com/ophub/amlogic-s9xxx-armbian/main/documents/README.md` (seções 12.4.1 e 12.6) e `https://forum.armbian.com/topic/33676-installation-instructions-for-tv-boxes-with-amlogic-cpus/`.
+  - `u-boot.ext` extraído da partição FAT da própria imagem (offset 4.194.304): 646.455 bytes, SHA-256 `207cdbe16145bea4602d62cde4c5e1083f30c5742beef714bec259d15c94545c`, equivalente a `u-boot-s905x-s912.bin` da release.
+- **Comandos executados (sem segredos):** `ip neigh show`; varredura de porta 5555 em `192.168.0.0/24`; `mdir -i armbian.img@@4194304 ::/`; `mtype -i armbian.img@@4194304 ::/s905_autoscript.cmd`; `mcopy -i armbian.img@@4194304 ::/u-boot-s905x-s912.bin u-boot.ext`; `sha256sum u-boot.ext`.
+- **Resultado observado / evidência:**
+  - O operador confirmou: **\"the box booted android even when i pressed the button\"** — o botão/reset não alterou o resultado.
+  - `192.168.0.101` e `192.168.0.250` compartilham o mesmo MAC `74:e6:e2:d6:5b:94` (OUI Dell Inc.); são o mesmo dispositivo Dell da rede, **não** a TX9. Não há ADB de Android da TX9 acessível (nenhum outro host responde na porta 5555).
+  - A documentação da release ophub descreve `adb shell reboot update` como forma de forçar boot por SD/USB, mas exige depuração USB ativada no Android — impossível sem tela funcional neste momento.
+  - Inspeção da própria imagem: `s905_autoscript.cmd` contém `if fatload mmc 0 0x1000000 u-boot.ext; then go 0x1000000; fi;` seguido do fallback que carrega kernel/dtb diretamente com o U-Boot antigo. `aml_autoscript.cmd` varre `mmc 0`, USB e eMMC e grava `bootfromsd`. O FAQ oficial recomenda copiar `u-boot-s905x-s912.bin` para `u-boot.ext` em TX3 Mini/S905W.
+  - A documentação ophub, por sua vez, restringe `u-boot.ext` ao contorno de memória (`UBOOT_OVERLOAD`) e diz para não copiar u-boot para outros fins; portanto esta é uma **hipótese de experimento**, não uma conclusão.
+- **Falhas / limitações:** o mecanismo exato do botão nesta PCB `B00-MX3mini-REV1.7` continua não comprovado; `PLAN.md` já o classifica como candidato, não garantia. Sem HDMI e sem ADB, a única observação disponível é a rede e, em último caso, UART.
+- **Rollback e estado final:** nenhuma alteração no cartão ou na TX9 neste registro. Arquivos preparados no host: `/tmp/opencode/armbian/armbian.img` (cópia descomprimida, 3,5 GB), `/tmp/opencode/armbian/u-boot.ext` e `/tmp/opencode/armbian/add-uboot-ext.sh` (syntax check OK).
+- **Gate aprovado?** NÃO (F2).
+- **Próximo experimento:** operador remove o cartão da TX9, recoloca no leitor USB e executa `sudo bash /tmp/opencode/armbian/add-uboot-ext.sh`; o script grava apenas `u-boot.ext` na partição FAT e confirma o SHA-256. Em seguida, reinserir na TX9, ligar mantendo o reset pressionado por mais tempo e repetir a varredura de rede. Se ainda bootar Android, trocar para microSD de 16/32 GB (risco SDXC documentado) antes de considerar UART.
 
 ## Modelo para novos registros
 
